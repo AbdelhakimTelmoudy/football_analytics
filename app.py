@@ -1,13 +1,25 @@
+
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
 
 # ============================================================
-# CONFIG
+# CONFIGURATION
 # ============================================================
 
 API_BASE = "https://api.football-data.org/v4"
+
+# ============================================================
+# TOKEN API
+# ============================================================
+# ⚠️ Pour un projet public GitHub, ne mets pas le token ici.
+# Pour ton test local, tu peux le mettre directement ici.
+
+API_TOKEN = "d9c602b3dbdc426eaaf99a1e389cd54c"
+
+# ============================================================
+# STREAMLIT CONFIG
+# ============================================================
 
 st.set_page_config(
     page_title="Football Analytics",
@@ -38,18 +50,12 @@ h1 {
     padding: 12px;
 }
 
-.team-card {
-    padding: 18px;
-    border-radius: 14px;
-    border: 1px solid rgba(128,128,128,.25);
-    margin-bottom: 15px;
-}
-
 .match-card {
     padding: 18px;
     border-radius: 14px;
     border: 1px solid rgba(128,128,128,.25);
     text-align: center;
+    margin-bottom: 10px;
 }
 
 .small-text {
@@ -60,24 +66,14 @@ h1 {
 </style>
 """, unsafe_allow_html=True)
 
-
 # ============================================================
-# TOKEN
+# VERIFICATION TOKEN
 # ============================================================
-# ============================================================
-# TOKEN
-# ============================================================
-
-API_TOKEN = st.secrets.get(
-    "FOOTBALL_API_TOKEN",
-    ""
-)
 
 if not API_TOKEN:
-    st.error(
-        "❌ Token football-data.org non configuré."
-    )
+    st.error("❌ Token football-data.org non configuré.")
     st.stop()
+
 # ============================================================
 # COMPETITIONS
 # ============================================================
@@ -93,7 +89,6 @@ COMPETITIONS = {
     "Primeira Liga": "PPL"
 }
 
-
 # ============================================================
 # API CLIENT
 # ============================================================
@@ -102,28 +97,25 @@ COMPETITIONS = {
     ttl=300,
     show_spinner=False
 )
-def api_request(
-    endpoint,
-    params=None
-):
+def api_request(endpoint, params=None):
 
-    if not API_TOKEN:
-        return None, "TOKEN_MISSING"
+    url = API_BASE + endpoint
+
+    headers = {
+        "X-Auth-Token": API_TOKEN,
+        "Accept": "application/json"
+    }
 
     try:
 
         response = requests.get(
-            API_BASE + endpoint,
-            headers={
-                "X-Auth-Token": API_TOKEN,
-                "Accept": "application/json"
-            },
+            url,
+            headers=headers,
             params=params,
             timeout=20
         )
 
         if response.status_code == 200:
-
             return response.json(), None
 
         if response.status_code == 400:
@@ -156,27 +148,28 @@ def api_request(
         return None, "REQUEST_ERROR"
 
 
+# ============================================================
+# API ERROR
+# ============================================================
+
 def show_api_error(error):
 
     messages = {
 
-        "TOKEN_MISSING":
-            "❌ Token API absent. Configure .streamlit/secrets.toml.",
+        "BAD_REQUEST":
+            "❌ Requête incorrecte.",
 
         "UNAUTHORIZED":
             "❌ Token API invalide.",
 
         "FORBIDDEN":
-            "❌ Accès refusé. Ton abonnement ne permet peut-être pas cet endpoint.",
+            "❌ Accès refusé. Cet endpoint peut nécessiter un abonnement supérieur.",
 
         "NOT_FOUND":
             "❌ Ressource introuvable.",
 
         "RATE_LIMIT":
-            "⏳ Limite de requêtes atteinte. Attends avant de recommencer.",
-
-        "BAD_REQUEST":
-            "❌ Requête incorrecte.",
+            "⏳ Limite de requêtes atteinte. Réessaie plus tard.",
 
         "TIMEOUT":
             "⏱️ Timeout de connexion.",
@@ -191,7 +184,7 @@ def show_api_error(error):
     st.error(
         messages.get(
             error,
-            f"Erreur API : {error}"
+            f"❌ Erreur API : {error}"
         )
     )
 
@@ -232,13 +225,19 @@ with st.sidebar:
         use_container_width=True
     ):
 
-        data, error = api_request(
-            f"/competitions/{competition_code}"
-        )
+        with st.spinner("Connexion à football-data.org..."):
+
+            data, error = api_request(
+                f"/competitions/{competition_code}"
+            )
 
         if data:
 
             st.success("🟢 API connectée")
+
+            st.caption(
+                f"Compétition : {data.get('name', '-')}"
+            )
 
         else:
 
@@ -247,7 +246,7 @@ with st.sidebar:
     st.divider()
 
     st.caption(
-        "Données : football-data.org"
+        "API : football-data.org"
     )
 
 
@@ -260,7 +259,6 @@ st.title("⚽ Football Analytics")
 st.caption(
     f"{competition_name} • Saison {season}"
 )
-
 
 # ============================================================
 # NAVIGATION
@@ -286,7 +284,6 @@ page = st.radio(
 
 st.divider()
 
-
 # ============================================================
 # DASHBOARD
 # ============================================================
@@ -300,9 +297,7 @@ if page == "📊 Dashboard":
         type="primary"
     ):
 
-        with st.spinner(
-            "Chargement des données..."
-        ):
+        with st.spinner("Chargement des données..."):
 
             competition, error1 = api_request(
                 f"/competitions/{competition_code}"
@@ -310,16 +305,12 @@ if page == "📊 Dashboard":
 
             standings, error2 = api_request(
                 f"/competitions/{competition_code}/standings",
-                {
-                    "season": season
-                }
+                {"season": season}
             )
 
             matches, error3 = api_request(
                 f"/competitions/{competition_code}/matches",
-                {
-                    "season": season
-                }
+                {"season": season}
             )
 
         if error1:
@@ -357,28 +348,24 @@ if page == "📊 Dashboard":
             col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-
                 st.metric(
                     "🏟️ Compétition",
                     competition_name
                 )
 
             with col2:
-
                 st.metric(
                     "📅 Matchs",
                     len(match_list)
                 )
 
             with col3:
-
                 st.metric(
                     "✅ Terminés",
                     len(finished)
                 )
 
             with col4:
-
                 st.metric(
                     "⏳ À venir",
                     len(upcoming)
@@ -390,57 +377,42 @@ if page == "📊 Dashboard":
 
             with col1:
 
-                st.subheader(
-                    "📅 Saison"
+                st.subheader("📅 Saison")
+
+                st.write(
+                    f"Début : {current_season.get('startDate', '-')}"
                 )
 
                 st.write(
-                    "Début :",
-                    current_season.get(
-                        "startDate",
-                        "-"
-                    )
+                    f"Fin : {current_season.get('endDate', '-')}"
                 )
 
                 st.write(
-                    "Fin :",
-                    current_season.get(
-                        "endDate",
-                        "-"
-                    )
-                )
-
-                st.write(
-                    "Journée actuelle :",
-                    current_season.get(
-                        "currentMatchday",
-                        "-"
-                    )
+                    f"Journée actuelle : "
+                    f"{current_season.get('currentMatchday', '-')}"
                 )
 
             with col2:
 
                 if standings:
 
-                    table = standings.get(
+                    tables = standings.get(
                         "standings",
                         []
                     )
 
-                    if table:
+                    if tables:
 
-                        first_table = table[0].get(
+                        table = tables[0].get(
                             "table",
                             []
                         )
 
-                        if first_table:
+                        if table:
 
-                            leader = first_table[0]
+                            leader = table[0]
 
-                            st.subheader(
-                                "🥇 Leader"
-                            )
+                            st.subheader("🥇 Leader")
 
                             st.metric(
                                 "Équipe",
@@ -465,7 +437,9 @@ if page == "📊 Dashboard":
 
             st.divider()
 
+            # ====================================================
             # TOP 10
+            # ====================================================
 
             if standings:
 
@@ -488,47 +462,31 @@ if page == "📊 Dashboard":
                         rows.append({
 
                             "Pos":
-                                team.get(
-                                    "position"
-                                ),
+                                team.get("position"),
 
                             "Équipe":
                                 team.get(
                                     "team",
                                     {}
-                                ).get(
-                                    "name"
-                                ),
+                                ).get("name"),
 
                             "MJ":
-                                team.get(
-                                    "playedGames"
-                                ),
+                                team.get("playedGames"),
 
                             "V":
-                                team.get(
-                                    "won"
-                                ),
+                                team.get("won"),
 
                             "N":
-                                team.get(
-                                    "draw"
-                                ),
+                                team.get("draw"),
 
                             "D":
-                                team.get(
-                                    "lost"
-                                ),
+                                team.get("lost"),
 
                             "Diff":
-                                team.get(
-                                    "goalDifference"
-                                ),
+                                team.get("goalDifference"),
 
                             "Pts":
-                                team.get(
-                                    "points"
-                                )
+                                team.get("points")
                         })
 
                     st.subheader(
@@ -541,11 +499,19 @@ if page == "📊 Dashboard":
                         hide_index=True
                     )
 
+            # ====================================================
             # PROCHAINS MATCHS
+            # ====================================================
 
             st.subheader(
                 "📅 Prochains matchs"
             )
+
+            if not upcoming:
+
+                st.info(
+                    "Aucun prochain match trouvé."
+                )
 
             for match in upcoming[:6]:
 
@@ -584,8 +550,6 @@ if page == "📊 Dashboard":
                     """,
                     unsafe_allow_html=True
                 )
-
-                st.write("")
 
 
 # ============================================================
@@ -631,60 +595,42 @@ elif page == "🏆 Classement":
 
             for team in table:
 
+                team_info = team.get(
+                    "team",
+                    {}
+                )
+
                 rows.append({
 
                     "Position":
-                        team.get(
-                            "position"
-                        ),
+                        team.get("position"),
 
                     "Équipe":
-                        team.get(
-                            "team",
-                            {}
-                        ).get(
-                            "name"
-                        ),
+                        team_info.get("name"),
 
                     "MJ":
-                        team.get(
-                            "playedGames"
-                        ),
+                        team.get("playedGames"),
 
                     "V":
-                        team.get(
-                            "won"
-                        ),
+                        team.get("won"),
 
                     "N":
-                        team.get(
-                            "draw"
-                        ),
+                        team.get("draw"),
 
                     "D":
-                        team.get(
-                            "lost"
-                        ),
+                        team.get("lost"),
 
                     "BP":
-                        team.get(
-                            "goalsFor"
-                        ),
+                        team.get("goalsFor"),
 
                     "BC":
-                        team.get(
-                            "goalsAgainst"
-                        ),
+                        team.get("goalsAgainst"),
 
                     "Diff":
-                        team.get(
-                            "goalDifference"
-                        ),
+                        team.get("goalDifference"),
 
                     "Pts":
-                        team.get(
-                            "points"
-                        )
+                        team.get("points")
                 })
 
             df = pd.DataFrame(rows)
@@ -766,7 +712,6 @@ elif page == "📅 Matchs":
     }
 
     if status != "ALL":
-
         params["status"] = status
 
     data, error = api_request(
@@ -802,30 +747,22 @@ elif page == "📅 Matchs":
             rows.append({
 
                 "Date":
-                    match.get(
-                        "utcDate"
-                    ),
+                    match.get("utcDate"),
 
                 "Journée":
-                    match.get(
-                        "matchday"
-                    ),
+                    match.get("matchday"),
 
                 "Domicile":
                     match.get(
                         "homeTeam",
                         {}
-                    ).get(
-                        "name"
-                    ),
+                    ).get("name"),
 
                 "Extérieur":
                     match.get(
                         "awayTeam",
                         {}
-                    ).get(
-                        "name"
-                    ),
+                    ).get("name"),
 
                 "Score":
                     f"{full_time.get('home', '-')}"
@@ -833,14 +770,10 @@ elif page == "📅 Matchs":
                     f"{full_time.get('away', '-')}",
 
                 "Statut":
-                    match.get(
-                        "status"
-                    ),
+                    match.get("status"),
 
                 "ID":
-                    match.get(
-                        "id"
-                    )
+                    match.get("id")
             })
 
         df = pd.DataFrame(rows)
@@ -850,13 +783,17 @@ elif page == "📅 Matchs":
             len(df)
         )
 
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True
-        )
+        if df.empty:
 
-        if not df.empty:
+            st.info("Aucun match trouvé.")
+
+        else:
+
+            st.dataframe(
+                df,
+                use_container_width=True,
+                hide_index=True
+            )
 
             st.download_button(
                 "📥 Exporter CSV",
@@ -993,8 +930,8 @@ elif page == "🥅 Buteurs":
         show_api_error(error)
 
         st.info(
-            "Cet endpoint peut nécessiter "
-            "un niveau d'accès supérieur selon ton abonnement."
+            "Selon ton abonnement football-data.org, "
+            "cet endpoint peut être limité."
         )
 
     else:
@@ -1027,32 +964,19 @@ elif page == "🥅 Buteurs":
                     i,
 
                 "Joueur":
-                    player.get(
-                        "name"
-                    ),
+                    player.get("name"),
 
                 "Équipe":
-                    team.get(
-                        "name"
-                    ),
+                    team.get("name"),
 
                 "Buts":
-                    scorer.get(
-                        "goals",
-                        0
-                    ),
+                    scorer.get("goals", 0),
 
                 "Passes":
-                    scorer.get(
-                        "assists",
-                        0
-                    ),
+                    scorer.get("assists", 0),
 
                 "Matchs":
-                    scorer.get(
-                        "playedMatches",
-                        0
-                    )
+                    scorer.get("playedMatches", 0)
             })
 
         df = pd.DataFrame(rows)
@@ -1082,6 +1006,12 @@ elif page == "🥅 Buteurs":
                 df,
                 use_container_width=True,
                 hide_index=True
+            )
+
+        else:
+
+            st.info(
+                "Aucun buteur disponible."
             )
 
 
@@ -1125,18 +1055,10 @@ elif page == "📈 Analyse":
                 {}
             )
 
-            home = full_time.get(
-                "home"
-            )
+            home = full_time.get("home")
+            away = full_time.get("away")
 
-            away = full_time.get(
-                "away"
-            )
-
-            if (
-                home is not None
-                and away is not None
-            ):
+            if home is not None and away is not None:
 
                 rows.append({
 
@@ -1144,17 +1066,13 @@ elif page == "📈 Analyse":
                         match.get(
                             "homeTeam",
                             {}
-                        ).get(
-                            "name"
-                        ),
+                        ).get("name"),
 
                     "Extérieur":
                         match.get(
                             "awayTeam",
                             {}
-                        ).get(
-                            "name"
-                        ),
+                        ).get("name"),
 
                     "HomeGoals":
                         home,
@@ -1211,17 +1129,17 @@ elif page == "📈 Analyse":
             )
 
             c2.metric(
-                "Buts",
+                "⚽ Buts",
                 int(total_goals)
             )
 
             c3.metric(
-                "Moyenne buts",
+                "📊 Moyenne buts",
                 f"{avg_goals:.2f}"
             )
 
             c4.metric(
-                "Victoire domicile",
+                "🏠 Victoires domicile",
                 int(home_wins)
             )
 
@@ -1230,17 +1148,17 @@ elif page == "📈 Analyse":
             c1, c2, c3 = st.columns(3)
 
             c1.metric(
-                "🏠 Victoires domicile",
+                "🏠 Domicile",
                 int(home_wins)
             )
 
             c2.metric(
-                "🤝 Matchs nuls",
+                "🤝 Nuls",
                 int(draws)
             )
 
             c3.metric(
-                "✈️ Victoires extérieur",
+                "✈️ Extérieur",
                 int(away_wins)
             )
 
@@ -1310,13 +1228,17 @@ elif page == "⚔️ Comparaison":
         )
 
         team_names = [
-            t.get(
-                "name"
-            )
+            t.get("name")
             for t in teams
         ]
 
-        if len(team_names) >= 2:
+        if len(team_names) < 2:
+
+            st.warning(
+                "Pas assez d'équipes disponibles."
+            )
+
+        else:
 
             col1, col2 = st.columns(2)
 
@@ -1351,50 +1273,49 @@ elif page == "⚔️ Comparaison":
                     }
                 )
 
-                if standings_data:
+                if error:
 
-                    table = standings_data.get(
+                    show_api_error(error)
+
+                elif standings_data:
+
+                    tables = standings_data.get(
                         "standings",
                         []
                     )
 
-                    if table:
+                    if tables:
 
-                        rows = table[0].get(
+                        table = tables[0].get(
                             "table",
                             []
                         )
 
                         team_a_data = next(
                             (
-                                x for x in rows
+                                x for x in table
                                 if x.get(
                                     "team",
                                     {}
-                                ).get(
-                                    "name"
-                                ) == team_a
+                                ).get("name")
+                                == team_a
                             ),
                             None
                         )
 
                         team_b_data = next(
                             (
-                                x for x in rows
+                                x for x in table
                                 if x.get(
                                     "team",
                                     {}
-                                ).get(
-                                    "name"
-                                ) == team_b
+                                ).get("name")
+                                == team_b
                             ),
                             None
                         )
 
-                        if (
-                            team_a_data
-                            and team_b_data
-                        ):
+                        if team_a_data and team_b_data:
 
                             comparison = pd.DataFrame({
 
@@ -1517,7 +1438,7 @@ elif page == "🔎 Match":
     ):
 
         with st.spinner(
-            "Recherche..."
+            "Recherche du match..."
         ):
 
             data, error = api_request(
