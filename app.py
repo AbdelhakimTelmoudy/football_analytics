@@ -1,9 +1,11 @@
+
 import streamlit as st
 import streamlit.components.v1 as components
 import requests
 import pandas as pd
 
 # ============================================================
+# CONFIGURATION
 # CONFIGURATION
 # ============================================================
 
@@ -90,6 +92,7 @@ h1 { font-weight: 800; }
 
 # ============================================================
 # VERIFICATION TOKEN
+# VERIFICATION TOKEN
 # ============================================================
 
 if not API_TOKEN:
@@ -100,6 +103,7 @@ if not API_TOKEN:
         "du même nom."
     )
     st.stop()
+
 
 # ============================================================
 # COMPETITIONS
